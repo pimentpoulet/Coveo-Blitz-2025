@@ -1,3 +1,4 @@
+import copy
 import random
 import math
 from game_message import *
@@ -45,6 +46,15 @@ class Role:
     def euclidian_distance(self, p1: Position, p2: Position):
         return math.sqrt((p1.x-p2.x)**2 + (p1.y-p2.y)**2)
 
+    def find_drop_cells(self, base: list[Position], state: TeamGameState):
+        """return available drop cells"""
+        drop_cells = copy.deepcopy(base)
+        for item in state.items:
+            if item.position in base:
+                drop_cells.remove(item.position)
+
+        return drop_cells
+
 
 class Collecter(Role):
     def __init__(self):
@@ -62,23 +72,33 @@ class Collecter(Role):
         return current_lingot
 
     def action(self, character: Character, base: list[Position], state: TeamGameState) -> Action:
-        if self.drop_destination is not None:
+        if self.drop_destination is not None:  # is going to drop
             if character.position == self.drop_destination:
                 # arrived to destination, drop item
-                self.drop_destination = None
+                if character.numberOfCarriedItems == 1:
+                    self.drop_destination = None
+                else:
+                    self.drop_destination = random.choice(
+                        self.find_drop_cells(base, state))
                 return DropAction(characterId=character.id)
             else:
                 return MoveToAction(characterId=character.id, position=self.drop_destination)
 
         if character.numberOfCarriedItems == state.constants.maxNumberOfItemsCarriedPerCharacter:
             # return to base
-            self.drop_destination = random.choice(base)
+            self.drop_destination = random.choice(
+                self.find_drop_cells(base, state))
             return MoveToAction(characterId=character.id, position=self.drop_destination)
 
         lingots = []
         for item in state.items:
             if item.value > 0 and item not in character.carriedItems and item.position not in base:
                 lingots.append(item)
+        if lingots == []:
+            # todo: change mode to protecter
+            # right now we just go to base
+            move_to = random.choice(base)
+            return MoveToAction(characterId=character.id, position=move_to)
 
         move_to = self.closest_lingot(character, lingots).position
 
