@@ -7,6 +7,7 @@ from game_message import *
 
 class Role:
     def __init__(self, base):
+        self.position_history = [None, None, None]
         self.base: list[Position] = base
 
     def action(self, character: Character, state: TeamGameState):
@@ -89,6 +90,19 @@ class Role:
 
         return items_on_enemy_side
 
+    def is_path_safe(self, path: list[Position], state: TeamGameState):
+        """Check if the path is safe"""
+        if path is None:
+            return False
+        for pos in path:
+            print("pos ", pos)
+            for enemy in state.otherCharacters:
+                print("enemy ", enemy.position)
+                if enemy.alive and enemy.position == pos:
+                    print('PATH IS NOT SAFE')
+                    return False
+        return True
+
 
 @dataclass_json
 @dataclass
@@ -135,8 +149,14 @@ class Collecter(Role):
                                 has_close_drop = True
                                 self.drop_destination = Position(i, j)
                     if has_close_drop == False:
-                        self.drop_destination = random.choice(
-                            drop_cells)
+                        for i in range(0, 10):
+                            self.drop_destination = random.choice(
+                                drop_cells)
+                            # check if the path is safe
+                            path = self.find_shortest_path(
+                                state, character.position, self.drop_destination)
+                            if self.is_path_safe(path, state):
+                                break
 
                 return ActionResponse(DropAction(characterId=character.id))
             else:
@@ -174,18 +194,50 @@ class Collecter(Role):
         if character.position == move_to:
             return ActionResponse(GrabAction(characterId=character.id))
 
+        path = self.find_path(move_to, state, lingots, character)
+
+        if len(path) < 3:
+            if not self.is_path_safe(path, state):
+                path = self.find_path_no_cars(
+                    move_to, state, lingots, character)
+
+        return ActionResponse(MoveToAction(characterId=character.id,
+                                           position=move_to))
+
+    def find_path(self, move_to, state: TeamGameState, lingots: list[Item], character: Character) -> Optional[list[Position]]:
         i = 15
-        while self.find_shortest_path(state, character.position, move_to) is None and i < 15:
+        path = self.find_shortest_path(state, character.position, move_to)
+        while path is None and i < 15:
             temp_list = copy.deepcopy(lingots)
             for lingot in temp_list:
                 if lingot.position == move_to:
                     lingots.remove(lingot)
             move_to = self.closest_lingot(
                 character, lingots).position
-            i += 1
+            path = self.find_shortest_path(state, character.position, move_to)
 
-        return ActionResponse(MoveToAction(characterId=character.id,
-                                           position=move_to))
+            print(path)
+
+            i += 1
+        return path
+
+    def find_path_no_cars(self, move_to, state: TeamGameState, lingots: list[Item], character: Character) -> Optional[list[Position]]:
+        i = 15
+        path = self.find_shortest_path(state, character.position, move_to)
+        print("IS SAFE? ", self.is_path_safe(path, state))
+        while self.is_path_safe(path, state) is False and i < 15:
+            temp_list = copy.deepcopy(lingots)
+            for lingot in temp_list:
+                if lingot.position == move_to:
+                    lingots.remove(lingot)
+            move_to = self.closest_lingot(
+                character, lingots).position
+            path = self.find_shortest_path(state, character.position, move_to)
+
+            print("TEST PATH: ", path)
+
+            i += 1
+        return path
 
 
 class Protecter(Role):
@@ -320,7 +372,7 @@ class Bot:
 
         return base
 
-    def dispatch(self, character: Character, yourCharacters: list[Character]) -> Role:
+    def initialize(self, character: Character, yourCharacters: list[Character]) -> Role:
         """Role dispatching algorithm"""
         if len(yourCharacters) <= 2:
             return Collecter(self.base)
@@ -334,17 +386,30 @@ class Bot:
 
             return Collecter(self.base)
 
+    def get_radiant(self, state: TeamGameState):
+        radiant_type = ["radiant_slag", "radiant_core"]
+        radiant_items = [i for i in state.items if i.type in radiant_type]
+        return Role.get_items_on_my_side(None, radiant_items, state)
+
+    def dispatch(self, state: TeamGameState):
+
+        count = Counter(type(role)
+                        for role in self.character_roles.values())
+        if len(self.get_radiant(state)) > 1 and count[Dumper] < 1:
+            pass
+
     def get_next_move(self, game_message: TeamGameState):
         """
         Here is where the magic happens, for now the moves are not very good. I bet you can do better ;)
         """
         actions = []
 
+        self.dispatch(game_message)
         for character in game_message.yourCharacters:
             # initialize characters at first tick
             if game_message.tick == 1:
                 self.base = self.find_base(game_message)
-                self.character_roles[character.id] = self.dispatch(
+                self.character_roles[character.id] = self.initialize(
                     character, game_message.yourCharacters)
 
             character_role = self.character_roles[character.id]
