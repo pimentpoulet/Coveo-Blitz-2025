@@ -57,7 +57,7 @@ class Collecter(Role):
                                 self.drop_destination = Position(i, j)
                     if has_close_drop == False:
                         self.drop_destination = random.choice(
-                            self.find_drop_cells(self.base, state))
+                            drop_cells)
 
                 return DropAction(characterId=character.id)
             else:
