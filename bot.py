@@ -7,15 +7,32 @@ class Bot:
         print("Initializing your super mega duper bot")
 
 
+    def find_base(self, state: TeamGameState) -> list[Position]:
+        base = []
+        for x, col in enumerate(state.teamZoneGrid):
+            for y, row in enumerate(col):
+                if row == state.currentTeamId and state.map.tiles[x][y] == TileType.EMPTY:
+                    base.append(Position(x, y))
+
+        return base
+
     def get_next_move(self, game_message: TeamGameState):
         """
         Here is where the magic happens, for now the moves are not very good. I bet you can do better ;)
         """
         actions = []
 
-        print(game_message.map)
-        print("items",game_message.items,"\n")
+        for character in game_message.yourCharacters:
+            # initialize characters at first tick
+            if game_message.tick == 1:
+                self.base = self.find_base(game_message)
+                self.charecter_roles[character.id] = Collecter()
 
+            character_role = self.charecter_roles[character.id]
+            actions.append(character_role.action(
+                character, self.base, game_message))
+
+        # You can clearly do better than the random actions above! Have fun!
         return actions
 
 
