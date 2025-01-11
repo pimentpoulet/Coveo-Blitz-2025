@@ -2,6 +2,7 @@ import copy
 import random
 import math
 from game_message import *
+
 from collections import Counter
 
 
@@ -23,6 +24,7 @@ class Role:
                 drop_cells.remove(item.position)
 
         return drop_cells
+
     
     def get_items_on_my_side(self, items, state: TeamGameState):
         items_on_my_side = []
@@ -41,6 +43,7 @@ class Role:
                 items_on_enemy_side.append(i)
 
         return items_on_enemy_side
+
 
 
 class Collecter(Role):
@@ -139,8 +142,10 @@ class Protecter(Role):
 
 
 class Dumper(Role):
+
     def __init__(self, base):
         super().__init__(base)
+
         self.radiant_items_on_my_side = []
         self.enemy_base_positions = []
         self.radiant_object_reached = False
@@ -153,6 +158,7 @@ class Dumper(Role):
                 if row != state.currentTeamId and state.map.tiles[x][y] == TileType.EMPTY:
                     enemy_base.append(Position(x, y))
         return enemy_base
+
 
     def collect_data(self, state: TeamGameState):
         radiant_type = ["radiant_slag", "radiant_core"]
@@ -220,6 +226,7 @@ class Dumper(Role):
 
         
 
+
     def get_closest_enemy_tile(self, character: Character) -> Position:
         closest_tile = min(
             self.enemy_base_positions,
@@ -229,9 +236,9 @@ class Dumper(Role):
         return closest_tile
 
     def action(self, character: Character, state: TeamGameState) -> Action:
+
         self.collect_data(state)
         return self.make_move(character, state)
-
 
 class Enemy(Role):
 
@@ -255,12 +262,14 @@ class Bot:
 
     def dispatch(self, character: Character, yourCharacters: list[Character]) -> Role:
         """Role dispatching algorithm"""
+
         count = Counter(type(role)
                             for role in self.character_roles.values())
         if count[Dumper] == 0:
             
             return Dumper(self.base)
             
+
         else:
             return Collecter(self.base)
 
@@ -269,9 +278,9 @@ class Bot:
         Here is where the magic happens, for now the moves are not very good. I bet you can do better ;)
         """
         actions = []
+
         
-        #print("team zone grid: ", game_message.teamIds)
-        #print("team zone grid: ", game_message.teamZoneGrid)
+
         for character in game_message.yourCharacters:
             # initialize characters at first tick
             if game_message.tick == 1:
