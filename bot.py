@@ -2,6 +2,7 @@ import copy
 import random
 import math
 from game_message import *
+from collections import Counter
 
 
 class Role:
@@ -22,6 +23,24 @@ class Role:
                 drop_cells.remove(item.position)
 
         return drop_cells
+    
+    def get_items_on_my_side(self, items, state: TeamGameState):
+        items_on_my_side = []
+
+        for i in items:
+            if state.teamZoneGrid[i.position.x][i.position.y] == state.currentTeamId:
+                items_on_my_side.append(i)
+
+        return items_on_my_side
+    
+    def get_items_on_enemy_side(self, items, state: TeamGameState):
+        items_on_enemy_side = []
+
+        for i in items:
+            if state.teamZoneGrid[i.position.x][i.position.y] != state.currentTeamId:
+                items_on_enemy_side.append(i)
+
+        return items_on_enemy_side
 
 
 class Collecter(Role):
@@ -120,9 +139,8 @@ class Protecter(Role):
 
 
 class Dumper(Role):
-    def __init__(self, game_message, character_id):
-        self.game_message = game_message
-        self.character_id = character_id
+    def __init__(self, base):
+        super().__init__(base)
         self.radiant_items_on_my_side = []
         self.enemy_base_positions = []
         self.radiant_object_reached = False
@@ -135,31 +153,57 @@ class Dumper(Role):
                     enemy_base.append(Position(x, y))
         return enemy_base
 
-    def collect_data(self):
+    def collect_data(self, state: TeamGameState):
         radiant_type = ["radiant_slag", "radiant_core"]
-        radiant_items = [i for i in self.game_message.items if i.type in radiant_type]
-        self.radiant_items_on_my_side = get_items_on_my_side(
-            radiant_items, self.game_message.currentTeamId, self.game_message
-        )
-        self.enemy_base_positions = self.calculate_enemy_base(self.game_message)
+        radiant_items = [i for i in state.items if i.type in radiant_type]
+        self.radiant_items_on_my_side = self.get_items_on_my_side(radiant_items, state)
+        self.enemy_base_positions = self.calculate_enemy_base(state)
+        
+
+        #remove from enemy base position the position of the radiant items on enemy side
+        for i in state.items:
+            if i.position in self.enemy_base_positions:
+                self.enemy_base_positions.remove(i.position)
+
+
+
+
 
     def make_move(self, character: Character, state: TeamGameState) -> Action:
-        if not self.radiant_items_on_my_side:
-            return None  # No action if no items on your side
+        if not self.radiant_items_on_my_side :
+            
+            if character.numberOfCarriedItems == 0:
+                print("JE boguye ici")
+                return MoveToAction(characterId=character.id, position=character.position)
+            else:
+                closest_enemy_tile = self.get_closest_enemy_tile(character)
+                if closest_enemy_tile and character.position == closest_enemy_tile:
+                    print("titi")
+                    return DropAction(characterId=character.id)
+                
+                return MoveToAction(characterId=character.id, position=closest_enemy_tile)
+
+        else:
+            target_item = self.radiant_items_on_my_side[0]
+            if character.position == target_item.position:
+                print("toto")
+                return GrabAction(characterId=character.id)
+
+            print("character.numberOfCarriedItems", character.numberOfCarriedItems, "\n")
+            print("state.constants.maxNumberOfItemsCarriedPerCharacter", state.constants.maxNumberOfItemsCarriedPerCharacter, "\n")
+
+            if character.numberOfCarriedItems < state.constants.maxNumberOfItemsCarriedPerCharacter:
+                print("tata")
+                return MoveToAction(characterId=character.id, position=target_item.position)
+
+            closest_enemy_tile = self.get_closest_enemy_tile(character)
+            if closest_enemy_tile and character.position == closest_enemy_tile:
+                print("titi")
+                return DropAction(characterId=character.id)
+            
+            return MoveToAction(characterId=character.id, position=closest_enemy_tile)
+
         
-        target_item = self.radiant_items_on_my_side[0]
-
-        if character.position == target_item.position:
-            return GrabAction(characterId=self.character_id)
-
-        if character.numberOfCarriedItems < state.constants.maxNumberOfItemsCarriedPerCharacter:
-            return MoveToAction(characterId=self.character_id, position=target_item.position)
-
-        closest_enemy_tile = self.get_closest_enemy_tile(character)
-        if closest_enemy_tile and character.position == closest_enemy_tile:
-            return DropAction(characterId=self.character_id)
-
-        return MoveToAction(characterId=self.character_id, position=closest_enemy_tile)
 
     def get_closest_enemy_tile(self, character: Character) -> Position:
         closest_tile = min(
@@ -170,7 +214,7 @@ class Dumper(Role):
         return closest_tile
 
     def action(self, character: Character, state: TeamGameState) -> Action:
-        self.collect_data()
+        self.collect_data(state)
         return self.make_move(character, state)
 
 
@@ -196,9 +240,12 @@ class Bot:
 
     def dispatch(self, character: Character, yourCharacters: list[Character]) -> Role:
         """Role dispatching algorithm"""
-        if len(yourCharacters) <= 2:
-            return Collecter(self.base)
-
+        count = Counter(type(role)
+                            for role in self.character_roles.values())
+        if count[Dumper] == 0:
+            
+            return Dumper(self.base)
+            
         else:
             return Collecter(self.base)
 
@@ -207,7 +254,9 @@ class Bot:
         Here is where the magic happens, for now the moves are not very good. I bet you can do better ;)
         """
         actions = []
-
+        
+        #print("team zone grid: ", game_message.teamIds)
+        #print("team zone grid: ", game_message.teamZoneGrid)
         for character in game_message.yourCharacters:
             # initialize characters at first tick
             if game_message.tick == 1:
