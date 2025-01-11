@@ -28,17 +28,19 @@ class Bot:
             # initialize characters at first tick
             if game_message.tick == 1:
                 self.base = self.find_base(game_message)
-                self.charecter_roles[character.id] = Collecter()
+                self.charecter_roles[character.id] = Collecter(self.base)
 
             character_role = self.charecter_roles[character.id]
             actions.append(character_role.action(
-                character, self.base, game_message))
+                character, game_message))
 
         # You can clearly do better than the random actions above! Have fun!
         return actions
 
 
 class Role:
+    def __init__(self, base):
+        self.base: list[Position] = base
 
     def action(self, character: Character, state: TeamGameState) -> Action:
         pass
@@ -57,7 +59,8 @@ class Role:
 
 
 class Collecter(Role):
-    def __init__(self):
+    def __init__(self, base):
+        super.__init__(base)
         self.drop_destination = None
 
     def closest_lingot(self, character: Character, lingots: list[Item]) -> Item:
@@ -71,7 +74,7 @@ class Collecter(Role):
 
         return current_lingot
 
-    def action(self, character: Character, base: list[Position], state: TeamGameState) -> Action:
+    def action(self, character: Character, state: TeamGameState) -> Action:
         if self.drop_destination is not None:  # is going to drop
             if character.position == self.drop_destination:
                 # arrived to destination, drop item
@@ -79,7 +82,7 @@ class Collecter(Role):
                     self.drop_destination = None
                 else:
                     self.drop_destination = random.choice(
-                        self.find_drop_cells(base, state))
+                        self.find_drop_cells(self.base, state))
                 return DropAction(characterId=character.id)
             else:
                 return MoveToAction(characterId=character.id, position=self.drop_destination)
@@ -87,17 +90,17 @@ class Collecter(Role):
         if character.numberOfCarriedItems == state.constants.maxNumberOfItemsCarriedPerCharacter:
             # return to base
             self.drop_destination = random.choice(
-                self.find_drop_cells(base, state))
+                self.find_drop_cells(self.base, state))
             return MoveToAction(characterId=character.id, position=self.drop_destination)
 
         lingots = []
         for item in state.items:
-            if item.value > 0 and item not in character.carriedItems and item.position not in base:
+            if item.value > 0 and item not in character.carriedItems and item.position not in self.base:
                 lingots.append(item)
         if lingots == []:
-            # todo: change mode to protecter
+            # todo: change Role to protecter
             # right now we just go to base
-            move_to = random.choice(base)
+            move_to = random.choice(self.base)
             return MoveToAction(characterId=character.id, position=move_to)
 
         move_to = self.closest_lingot(character, lingots).position
@@ -108,6 +111,30 @@ class Collecter(Role):
             action = MoveToAction(characterId=character.id, position=move_to)
 
         return action
+
+
+class Protecter(Role):
+    def action(self, character: Character, state: TeamGameState):
+        intruders = self.find_intruders(self.base)
+
+    def find_intruders(self, state: TeamGameState):
+        """Find enemies in our base"""
+        intruders = []
+        for enemy in state.otherCharacters:
+            if enemy.alive and enemy.position in self.base:
+                intruders.append(enemy)
+        return intruders
+
+    def closest_intruders(self, intruders: list[Character], character: Character):
+        smallest_dist = math.inf
+        closest = intruders[0]
+        for intruder in intruders:
+            dist = self.euclidian_distance(
+                intruder.position, character.position)
+            if dist < smallest_dist:
+                smallest_dist = dist
+                closest = intruder
+        return closest
 
 
 class Dumper(Role):
