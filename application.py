@@ -12,6 +12,7 @@ from bot import Bot
 from game_message import TeamGameState
 
 
+
 async def run():
     uri = "ws://127.0.0.1:8765"
 
@@ -43,7 +44,8 @@ async def game_loop(websocket: websockets.WebSocketServerProtocol, bot: Bot):
 
         if game_message.lastTickErrors:
             print(f"Errors during last tick : {game_message.lastTickErrors}")
-
+            if game_message.tick == 3:
+                break
         actions = []
 
         # Just so your bot doesn't completely crash. ;)

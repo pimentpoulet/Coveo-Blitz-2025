@@ -13,19 +13,72 @@ class Bot:
         """
         actions = []
 
-        for character in game_message.yourCharacters:
-            actions.append(
-                random.choice(
-                    [
-                        MoveUpAction(characterId=character.id),
-                        MoveRightAction(characterId=character.id),
-                        MoveDownAction(characterId=character.id),
-                        MoveLeftAction(characterId=character.id),
-                        GrabAction(characterId=character.id),
-                        DropAction(characterId=character.id),
-                    ]
-                )
-            )
+        print(game_message.map)
+        print("items",game_message.items,"\n")
+        
 
-        # You can clearly do better than the random actions above! Have fun!
+        
         return actions
+
+
+
+class Dumper():
+    def __init__(self, game_message):
+        self.game_message = game_message
+        self.radiant_items_on_my_side = []
+        # caracter id of the dumper
+        self.character_id = None
+        self.radiant_object_reached = False
+        
+
+    def collect_data(self):
+        radiant_type = ["radiant_slag", "radiant_core"]
+        radiant_items = []
+
+
+        for i in self.game_message.items:
+            if i.type in radiant_type:
+                print("items radiant", i)
+                radiant_items.append(i)
+
+        #check if radiant items are on my side
+        self.radiant_items_on_my_side = get_items_on_my_side(radiant_items, self.game_message.currentTeamId, self.game_message)
+        
+        
+
+
+    def goto_radiant(self):
+
+        self.game_message.actions.append(MoveToAction(characterId=self.character_id, target=self.radiant_items_on_my_side[0].position))
+        
+        # Check item reached
+        if self.game_message.characters[self.character_id].position == self.radiant_items_on_my_side[0].position:
+            self.radiant_object_reached = True
+        
+
+
+    def pick_up(self):
+        self.game_message.actions.append(GrabAction(self.character_id))
+        
+
+    def goto_enemy(self):
+
+        # get the map tiles
+        self.game_message.map.tiles
+
+    def dump(self):
+        self.game_message.actions.append(DropAction(self.character_id))
+
+
+
+
+
+# fonction that take a list of items and the team Id and return a list of items on the team side
+def get_items_on_my_side(items, teamId, game_message):
+    items_on_my_side = []
+
+    for i in items:
+        if game_message.teamZoneGrid[i.position.y][i.position.x] == game_message.currentTeamId:
+            items_on_my_side.append(i)
+        
+    return items_on_my_side
