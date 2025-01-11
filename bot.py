@@ -24,8 +24,52 @@ class Role:
 
         return drop_cells
 
-    def is_path_valid(self):
-        pass
+    def find_shortest_path(self, state: TeamGameState, start: Position, end: Position) -> Optional[list[Position]]:
+        from collections import deque
+
+        class PositionWrapper:
+            def __init__(self, position: Position):
+                self.position = position
+
+            def __eq__(self, other):
+                if isinstance(other, PositionWrapper):
+                    return self.position.x == other.position.x and self.position.y == other.position.y
+                return False
+
+            def __hash__(self):
+                return hash((self.position.x, self.position.y))
+
+        def is_within_bounds(pos: Position) -> bool:
+            return 0 <= pos.x < state.map.width and 0 <= pos.y < state.map.height
+
+        def is_walkable(pos: Position) -> bool:
+            return state.map.tiles[pos.x][pos.y] == TileType.EMPTY
+
+        if not is_within_bounds(start) or not is_within_bounds(end) or not is_walkable(start) or not is_walkable(end):
+            return None
+
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        visited = set()
+        queue = deque([(start, [])])
+
+        while queue:
+            current, path = queue.popleft()
+            wrapped_current = PositionWrapper(current)
+
+            if wrapped_current == PositionWrapper(end):
+                return path + [end]
+
+            if wrapped_current in visited:
+                continue
+
+            visited.add(wrapped_current)
+
+            for dx, dy in directions:
+                new_pos = Position(current.x + dx, current.y + dy)
+                if is_within_bounds(new_pos) and is_walkable(new_pos) and PositionWrapper(new_pos) not in visited:
+                    queue.append((new_pos, path + [current]))
+
+        return None
 
 
 @dataclass_json
@@ -81,7 +125,7 @@ class Collecter(Role):
                 return ActionResponse(MoveToAction(characterId=character.id, position=self.drop_destination))
 
         if character.numberOfCarriedItems == state.constants.maxNumberOfItemsCarriedPerCharacter:
-            # return to base
+            # return to base to drop
             self.drop_destination = random.choice(
                 self.find_drop_cells(self.base, state))
             return ActionResponse(MoveToAction(characterId=character.id, position=self.drop_destination))
@@ -101,6 +145,16 @@ class Collecter(Role):
             return ActionResponse(MoveToAction(characterId=character.id, position=move_to), Protecter(self.base))
 
         move_to = self.closest_lingot(character, lingots).position
+
+        i = 15
+        while self.find_shortest_path(state, character.position, move_to) is None and i < 15:
+            temp_list = copy.deepcopy(lingots)
+            for lingot in temp_list:
+                if lingot.position == move_to:
+                    lingots.remove(lingot)
+            move_to = self.closest_lingot(
+                character, lingots).position
+            i += 1
 
         if character.position == move_to:
             return ActionResponse(GrabAction(characterId=character.id))
