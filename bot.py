@@ -207,7 +207,7 @@ class Collecter(Role):
                                            position=move_to))
 
     def find_path(self, move_to, state: TeamGameState, lingots: list[Item], character: Character) -> Optional[list[Position]]:
-        i = 15
+        i = 0
         path = self.find_shortest_path(state, character.position, move_to)
         while path is None and i < 15:
             temp_list = copy.deepcopy(lingots)
@@ -320,7 +320,7 @@ class Dumper(Role):
 
             if character.numberOfCarriedItems == 0:
 
-                return ActionResponse(MoveToAction(characterId=character.id, position=character.position), Collecter(self.base))
+                return ActionResponse(MoveToAction(characterId=character.id, position=character.position))
 
             else:
                 self.flag_dumper_on_mission = True
