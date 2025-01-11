@@ -9,7 +9,7 @@ class Role:
     def __init__(self, base):
         self.base: list[Position] = base
 
-    def action(self, character: Character, state: TeamGameState) -> Action:
+    def action(self, character: Character, state: TeamGameState):
         pass
 
     def euclidian_distance(self, p1: Position, p2: Position):
@@ -24,6 +24,20 @@ class Role:
 
         return drop_cells
 
+    def is_path_valid(self):
+        pass
+
+
+@dataclass_json
+@dataclass
+class ActionResponse:
+    """ActionResponse."""
+
+    action: Action
+    """Action."""
+    new_role: Role = None
+    """New role."""
+
 
 class Collecter(Role):
     def __init__(self, base):
@@ -34,14 +48,16 @@ class Collecter(Role):
         smallest_dist = math.inf
         current_lingot = lingots[0]
         for lingot in lingots:
-            dist = self.euclidian_distance(character.position, lingot.position)
+            dist = self.euclidian_distance(
+                character.position, lingot.position) - lingot.value
             if dist < smallest_dist:
                 smallest_dist = dist
                 current_lingot = lingot
 
         return current_lingot
 
-    def action(self, character: Character, state: TeamGameState) -> Action:
+    def action(self, character: Character, state: TeamGameState) -> ActionResponse:
+
         if self.drop_destination is not None:  # is going to drop
             if character.position == self.drop_destination:
                 # arrived to destination, drop item
@@ -60,15 +76,15 @@ class Collecter(Role):
                         self.drop_destination = random.choice(
                             drop_cells)
 
-                return DropAction(characterId=character.id)
+                return ActionResponse(DropAction(characterId=character.id))
             else:
-                return MoveToAction(characterId=character.id, position=self.drop_destination)
+                return ActionResponse(MoveToAction(characterId=character.id, position=self.drop_destination))
 
         if character.numberOfCarriedItems == state.constants.maxNumberOfItemsCarriedPerCharacter:
             # return to base
             self.drop_destination = random.choice(
                 self.find_drop_cells(self.base, state))
-            return MoveToAction(characterId=character.id, position=self.drop_destination)
+            return ActionResponse(MoveToAction(characterId=character.id, position=self.drop_destination))
 
         lingots = []
         my_characters_items = []
@@ -80,30 +96,28 @@ class Collecter(Role):
             if item.value > 0 and item not in my_characters_items and item.position not in self.base:
                 lingots.append(item)
         if lingots == []:
-            # todo: change Role to protecter
-            # right now we just go to base
+            # change role to Protecter
             move_to = random.choice(self.base)
-            return MoveToAction(characterId=character.id, position=move_to)
+            return ActionResponse(MoveToAction(characterId=character.id, position=move_to), Protecter(self.base))
 
         move_to = self.closest_lingot(character, lingots).position
 
         if character.position == move_to:
-            action = GrabAction(characterId=character.id)
+            return ActionResponse(GrabAction(characterId=character.id))
         else:
-            action = MoveToAction(characterId=character.id, position=move_to)
-
-        return action
+            return ActionResponse(MoveToAction(characterId=character.id,
+                                               position=move_to))
 
 
 class Protecter(Role):
-    def action(self, character: Character, state: TeamGameState):
+    def action(self, character: Character, state: TeamGameState) -> ActionResponse:
         intruders = self.find_intruders(state)
         if intruders == []:
             move_to = random.choice(self.base)
-            return MoveToAction(characterId=character.id, position=move_to)
+            return ActionResponse(MoveToAction(characterId=character.id, position=move_to))
         else:
             move_to = self.closest_intruders(intruders, character).position
-            return MoveToAction(characterId=character.id, position=move_to)
+            return ActionResponse(MoveToAction(characterId=character.id, position=move_to))
 
     def find_intruders(self, state: TeamGameState):
         """Find enemies in our base"""
@@ -156,7 +170,9 @@ class Bot:
             return Collecter(self.base)
 
         else:
-            Counter(self.character_roles)
+            count = Counter(type(role)
+                            for role in self.character_roles.values())
+
             return Collecter(self.base)
 
     def get_next_move(self, game_message: TeamGameState):
@@ -173,8 +189,13 @@ class Bot:
                     character, game_message.yourCharacters)
 
             character_role = self.character_roles[character.id]
-            actions.append(character_role.action(
-                character, game_message))
+            action_response: ActionResponse = character_role.action(
+                character, game_message)
+            actions.append(action_response.action)
+            if action_response.new_role is not None:
+                print(f"{character.id} changed role to {
+                      action_response.new_role}")
+                self.character_roles[character.id] = action_response.new_role
 
         # You can clearly do better than the random actions above! Have fun!
         return actions
