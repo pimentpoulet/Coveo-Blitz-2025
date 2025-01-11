@@ -29,6 +29,7 @@ class Bot:
             if game_message.tick == 1:
                 self.base = self.find_base(game_message)
                 self.charecter_roles[character.id] = Collecter(self.base)
+                # self.charecter_roles[character.id] = Protecter(self.base)
 
             character_role = self.charecter_roles[character.id]
             actions.append(character_role.action(
@@ -115,7 +116,13 @@ class Collecter(Role):
 
 class Protecter(Role):
     def action(self, character: Character, state: TeamGameState):
-        intruders = self.find_intruders(self.base)
+        intruders = self.find_intruders(state)
+        if intruders == []:
+            move_to = random.choice(self.base)
+            return MoveToAction(characterId=character.id, position=move_to)
+        else:
+            move_to = self.closest_intruders(intruders, character).position
+            return MoveToAction(characterId=character.id, position=move_to)
 
     def find_intruders(self, state: TeamGameState):
         """Find enemies in our base"""
