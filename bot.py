@@ -320,7 +320,12 @@ class Dumper(Role):
 
             if character.numberOfCarriedItems == 0:
 
-                return ActionResponse(MoveToAction(characterId=character.id, position=character.position))
+                our_zone_positions = []
+                for x, col in enumerate(state.teamZoneGrid):
+                    for y, row in enumerate(col):
+                        if row == state.currentTeamId:
+                            our_zone_positions.append(Position(x, y))
+                return ActionResponse(MoveToAction(characterId=character.id, position=our_zone_positions[0]))
 
             else:
                 self.flag_dumper_on_mission = True
