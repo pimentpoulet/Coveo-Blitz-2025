@@ -1,6 +1,7 @@
 import copy
 import random
 import math
+from collections import Counter
 from game_message import *
 
 
@@ -70,8 +71,13 @@ class Collecter(Role):
             return MoveToAction(characterId=character.id, position=self.drop_destination)
 
         lingots = []
+        my_characters_items = []
+        for char in state.yourCharacters:
+            for carriedItem in char.carriedItems:
+                my_characters_items.append(carriedItem)
+
         for item in state.items:
-            if item.value > 0 and item not in character.carriedItems and item.position not in self.base:
+            if item.value > 0 and item not in my_characters_items and item.position not in self.base:
                 lingots.append(item)
         if lingots == []:
             # todo: change Role to protecter
@@ -150,6 +156,7 @@ class Bot:
             return Collecter(self.base)
 
         else:
+            Counter(self.character_roles)
             return Collecter(self.base)
 
     def get_next_move(self, game_message: TeamGameState):
