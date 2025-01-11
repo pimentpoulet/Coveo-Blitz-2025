@@ -144,6 +144,7 @@ class Dumper(Role):
         self.radiant_items_on_my_side = []
         self.enemy_base_positions = []
         self.radiant_object_reached = False
+        self.flag_dumper_on_mission = False
 
     def calculate_enemy_base(self, state: TeamGameState) -> list[Position]:
         enemy_base = []
@@ -159,49 +160,63 @@ class Dumper(Role):
         self.radiant_items_on_my_side = self.get_items_on_my_side(radiant_items, state)
         self.enemy_base_positions = self.calculate_enemy_base(state)
         
-
         #remove from enemy base position the position of the radiant items on enemy side
         for i in state.items:
             if i.position in self.enemy_base_positions:
                 self.enemy_base_positions.remove(i.position)
 
+        #print("self.enemy_base_positions before", self.enemy_base_positions, "\n")
 
+        # Remove the neutral zone from the enemy base positions
+        # the neutral zone is the zone where the teamZoneGrid is empty string ""
+        for x, col in enumerate(state.teamZoneGrid):
+            for y, row in enumerate(col):
+                if row == "":
+                    if Position(x, y) in self.enemy_base_positions:
+                        self.enemy_base_positions.remove(Position(x, y))
 
-
+        #print("self.enemy_base_positions AFTER", self.enemy_base_positions, "\n")
 
     def make_move(self, character: Character, state: TeamGameState) -> Action:
+
         if not self.radiant_items_on_my_side :
             
             if character.numberOfCarriedItems == 0:
-                print("JE boguye ici")
-                return MoveToAction(characterId=character.id, position=character.position)
-            else:
-                closest_enemy_tile = self.get_closest_enemy_tile(character)
-                if closest_enemy_tile and character.position == closest_enemy_tile:
-                    print("titi")
-                    return DropAction(characterId=character.id)
-                
-                return MoveToAction(characterId=character.id, position=closest_enemy_tile)
+            
+                our_zone_positions = []
+                for x, col in enumerate(state.teamZoneGrid):
+                    for y, row in enumerate(col):
+                        if row == state.currentTeamId:
+                            our_zone_positions.append(Position(x, y))
+            
+                return MoveToAction(characterId=character.id, position=our_zone_positions[0])
 
-        else:
+            else:
+                self.flag_dumper_on_mission = True
+
+        elif self.flag_dumper_on_mission == False:
+
             target_item = self.radiant_items_on_my_side[0]
             if character.position == target_item.position:
-                print("toto")
+                
                 return GrabAction(characterId=character.id)
 
-            print("character.numberOfCarriedItems", character.numberOfCarriedItems, "\n")
-            print("state.constants.maxNumberOfItemsCarriedPerCharacter", state.constants.maxNumberOfItemsCarriedPerCharacter, "\n")
-
             if character.numberOfCarriedItems < state.constants.maxNumberOfItemsCarriedPerCharacter:
-                print("tata")
+                
                 return MoveToAction(characterId=character.id, position=target_item.position)
+            else:
+                self.flag_dumper_on_mission = True
 
-            closest_enemy_tile = self.get_closest_enemy_tile(character)
-            if closest_enemy_tile and character.position == closest_enemy_tile:
-                print("titi")
-                return DropAction(characterId=character.id)
             
-            return MoveToAction(characterId=character.id, position=closest_enemy_tile)
+        
+        closest_enemy_tile = self.get_closest_enemy_tile(character)
+        if closest_enemy_tile and character.position == closest_enemy_tile:
+            if character.numberOfCarriedItems <= 1:
+                self.flag_dumper_on_mission = False
+
+            return DropAction(characterId=character.id)
+        return MoveToAction(characterId=character.id, position=closest_enemy_tile)
+
 
         
 
