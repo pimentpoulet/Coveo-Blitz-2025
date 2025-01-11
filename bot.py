@@ -200,8 +200,7 @@ class Collecter(Role):
 
         if len(path) < 3:
             if not self.is_path_safe(path, state):
-                path = self.find_path_no_cars(
-                    move_to, state, lingots, character)
+                move_to = random.choice(lingots).position
 
         return ActionResponse(MoveToAction(characterId=character.id,
                                            position=move_to))
