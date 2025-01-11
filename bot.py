@@ -48,8 +48,7 @@ class Role:
 
 class Collecter(Role):
     def __init__(self):
-        self.is_returning_to_base = False
-        self.destination = None
+        self.drop_destination = None
 
     def closest_lingot(self, character: Character, lingots: list[Item]) -> Item:
         smallest_dist = math.inf
@@ -63,15 +62,22 @@ class Collecter(Role):
         return current_lingot
 
     def action(self, character: Character, base: list[Position], state: TeamGameState) -> Action:
-        if character.numberOfCarriedItems == state.constants.maxNumberOfItemsCarriedPerCharacter:  # return to base
-            move_to = random.choice(base)
-            if character.position == move_to:
+        if self.drop_destination is not None:
+            if character.position == self.drop_destination:
+                # arrived to destination, drop item
+                self.drop_destination = None
                 return DropAction(characterId=character.id)
-            return MoveToAction(characterId=character.id, position=move_to)
+            else:
+                return MoveToAction(characterId=character.id, position=self.drop_destination)
+
+        if character.numberOfCarriedItems == state.constants.maxNumberOfItemsCarriedPerCharacter:
+            # return to base
+            self.drop_destination = random.choice(base)
+            return MoveToAction(characterId=character.id, position=self.drop_destination)
 
         lingots = []
         for item in state.items:
-            if item.value > 0 and item.position:
+            if item.value > 0 and item not in character.carriedItems and item.position not in base:
                 lingots.append(item)
 
         move_to = self.closest_lingot(character, lingots).position
