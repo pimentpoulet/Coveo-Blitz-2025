@@ -145,6 +145,8 @@ class Collecter(Role):
             return ActionResponse(MoveToAction(characterId=character.id, position=move_to), Protecter(self.base))
 
         move_to = self.closest_lingot(character, lingots).position
+        if character.position == move_to:
+            return ActionResponse(GrabAction(characterId=character.id))
 
         i = 15
         while self.find_shortest_path(state, character.position, move_to) is None and i < 15:
@@ -156,11 +158,8 @@ class Collecter(Role):
                 character, lingots).position
             i += 1
 
-        if character.position == move_to:
-            return ActionResponse(GrabAction(characterId=character.id))
-        else:
-            return ActionResponse(MoveToAction(characterId=character.id,
-                                               position=move_to))
+        return ActionResponse(MoveToAction(characterId=character.id,
+                                           position=move_to))
 
 
 class Protecter(Role):
