@@ -71,6 +71,24 @@ class Role:
 
         return None
 
+    def get_items_on_my_side(self, items, state: TeamGameState):
+        items_on_my_side = []
+
+        for i in items:
+            if state.teamZoneGrid[i.position.x][i.position.y] == state.currentTeamId:
+                items_on_my_side.append(i)
+
+        return items_on_my_side
+
+    def get_items_on_enemy_side(self, items, state: TeamGameState):
+        items_on_enemy_side = []
+
+        for i in items:
+            if state.teamZoneGrid[i.position.x][i.position.y] != state.currentTeamId:
+                items_on_enemy_side.append(i)
+
+        return items_on_enemy_side
+
 
 @dataclass_json
 @dataclass
@@ -140,9 +158,17 @@ class Collecter(Role):
             if item.value > 0 and item not in my_characters_items and item.position not in self.base:
                 lingots.append(item)
         if lingots == []:
-            # change role to Protecter
+            # change role to Dumper or Protecter
+            radiant_type = ["radiant_slag", "radiant_core"]
+            radiant_items = [i for i in state.items if i.type in radiant_type]
+            self.radiant_items_on_my_side = self.get_items_on_my_side(
+                radiant_items, state)
+            if len(self.radiant_items_on_my_side) > 0:
+                new_role = Dumper(self.base)
+            else:
+                new_role = Protecter(self.base)
             move_to = random.choice(self.base)
-            return ActionResponse(MoveToAction(characterId=character.id, position=move_to), Protecter(self.base))
+            return ActionResponse(MoveToAction(characterId=character.id, position=move_to), new_role)
 
         move_to = self.closest_lingot(character, lingots).position
         if character.position == move_to:
@@ -193,14 +219,91 @@ class Protecter(Role):
 
 
 class Dumper(Role):
-    def action(self):
-        pass
 
+    def __init__(self, base):
+        super().__init__(base)
 
-class Enemy(Role):
+        self.radiant_items_on_my_side = []
+        self.enemy_base_positions = []
+        self.radiant_object_reached = False
+        self.flag_dumper_on_mission = False
 
-    def action(self):
-        pass
+    def calculate_enemy_base(self, state: TeamGameState) -> list[Position]:
+        enemy_base = []
+        for x, col in enumerate(state.teamZoneGrid):
+            for y, row in enumerate(col):
+                if row != state.currentTeamId and state.map.tiles[x][y] == TileType.EMPTY:
+                    enemy_base.append(Position(x, y))
+        return enemy_base
+
+    def collect_data(self, state: TeamGameState):
+        radiant_type = ["radiant_slag", "radiant_core"]
+        radiant_items = [i for i in state.items if i.type in radiant_type]
+        self.radiant_items_on_my_side = self.get_items_on_my_side(
+            radiant_items, state)
+        self.enemy_base_positions = self.calculate_enemy_base(state)
+
+        # remove from enemy base position the position of the radiant items on enemy side
+        for i in state.items:
+            if i.position in self.enemy_base_positions:
+                self.enemy_base_positions.remove(i.position)
+
+        # print("self.enemy_base_positions before", self.enemy_base_positions, "\n")
+
+        # Remove the neutral zone from the enemy base positions
+        # the neutral zone is the zone where the teamZoneGrid is empty string ""
+        for x, col in enumerate(state.teamZoneGrid):
+            for y, row in enumerate(col):
+                if row == "":
+                    if Position(x, y) in self.enemy_base_positions:
+                        self.enemy_base_positions.remove(Position(x, y))
+
+        # print("self.enemy_base_positions AFTER", self.enemy_base_positions, "\n")
+
+    def make_move(self, character: Character, state: TeamGameState) -> Action:
+
+        if not self.radiant_items_on_my_side:
+
+            if character.numberOfCarriedItems == 0:
+
+                return ActionResponse(MoveToAction(characterId=character.id, position=character.position), Collecter(self.base))
+
+            else:
+                self.flag_dumper_on_mission = True
+
+        elif self.flag_dumper_on_mission == False:
+
+            target_item = self.radiant_items_on_my_side[0]
+            if character.position == target_item.position:
+
+                return ActionResponse(GrabAction(characterId=character.id))
+
+            if character.numberOfCarriedItems < state.constants.maxNumberOfItemsCarriedPerCharacter:
+
+                return ActionResponse(MoveToAction(characterId=character.id, position=target_item.position))
+            else:
+                self.flag_dumper_on_mission = True
+
+        closest_enemy_tile = self.get_closest_enemy_tile(character)
+        if closest_enemy_tile and character.position == closest_enemy_tile:
+            if character.numberOfCarriedItems <= 1:
+                self.flag_dumper_on_mission = False
+
+            return ActionResponse(DropAction(characterId=character.id))
+        return ActionResponse(MoveToAction(characterId=character.id, position=closest_enemy_tile))
+
+    def get_closest_enemy_tile(self, character: Character) -> Position:
+        closest_tile = min(
+            self.enemy_base_positions,
+            key=lambda tile: self.euclidian_distance(character.position, tile),
+            default=None
+        )
+        return closest_tile
+
+    def action(self, character: Character, state: TeamGameState) -> ActionResponse:
+
+        self.collect_data(state)
+        return self.make_move(character, state)
 
 
 class Bot:
@@ -225,6 +328,9 @@ class Bot:
         else:
             count = Counter(type(role)
                             for role in self.character_roles.values())
+
+            if count[Dumper] < 1:
+                return Dumper(self.base)
 
             return Collecter(self.base)
 
