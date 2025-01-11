@@ -6,3 +6,4 @@ map is [col][row]
  - doesnt take into account the value of the rocks
 2. escape enemeies in their zone !!! important
 3. Create destroyer Role
+4. anti move repeater

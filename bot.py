@@ -4,41 +4,6 @@ import math
 from game_message import *
 
 
-class Bot:
-    def __init__(self):
-        self.charecter_roles = {}
-        print("Initializing your super mega duper bot")
-
-    def find_base(self, state: TeamGameState) -> list[Position]:
-        base = []
-        for x, col in enumerate(state.teamZoneGrid):
-            for y, row in enumerate(col):
-                if row == state.currentTeamId and state.map.tiles[x][y] == TileType.EMPTY:
-                    base.append(Position(x, y))
-
-        return base
-
-    def get_next_move(self, game_message: TeamGameState):
-        """
-        Here is where the magic happens, for now the moves are not very good. I bet you can do better ;)
-        """
-        actions = []
-
-        for character in game_message.yourCharacters:
-            # initialize characters at first tick
-            if game_message.tick == 1:
-                self.base = self.find_base(game_message)
-                self.charecter_roles[character.id] = Collecter(self.base)
-                # self.charecter_roles[character.id] = Protecter(self.base)
-
-            character_role = self.charecter_roles[character.id]
-            actions.append(character_role.action(
-                character, game_message))
-
-        # You can clearly do better than the random actions above! Have fun!
-        return actions
-
-
 class Role:
     def __init__(self, base):
         self.base: list[Position] = base
@@ -61,7 +26,7 @@ class Role:
 
 class Collecter(Role):
     def __init__(self, base):
-        super.__init__(base)
+        super().__init__(base)
         self.drop_destination = None
 
     def closest_lingot(self, character: Character, lingots: list[Item]) -> Item:
@@ -79,11 +44,21 @@ class Collecter(Role):
         if self.drop_destination is not None:  # is going to drop
             if character.position == self.drop_destination:
                 # arrived to destination, drop item
-                if character.numberOfCarriedItems == 1:
+                if character.numberOfCarriedItems <= 1:
                     self.drop_destination = None
                 else:
-                    self.drop_destination = random.choice(
-                        self.find_drop_cells(self.base, state))
+                    # after dropping, check if we can drop in the closest drop cell
+                    drop_cells = self.find_drop_cells(self.base, state)
+                    has_close_drop = False
+                    for i in range(character.position.x-1, character.position.x+2):
+                        for j in range(character.position.y-1, character.position.y+2):
+                            if Position(i, j) in drop_cells:
+                                has_close_drop = True
+                                self.drop_destination = Position(i, j)
+                    if has_close_drop == False:
+                        self.drop_destination = random.choice(
+                            self.find_drop_cells(self.base, state))
+
                 return DropAction(characterId=character.id)
             else:
                 return MoveToAction(characterId=character.id, position=self.drop_destination)
@@ -153,3 +128,46 @@ class Enemy(Role):
 
     def action(self):
         pass
+
+
+class Bot:
+    def __init__(self):
+        self.character_roles = {}
+        print("Initializing your super mega duper bot")
+
+    def find_base(self, state: TeamGameState) -> list[Position]:
+        base = []
+        for x, col in enumerate(state.teamZoneGrid):
+            for y, row in enumerate(col):
+                if row == state.currentTeamId and state.map.tiles[x][y] == TileType.EMPTY:
+                    base.append(Position(x, y))
+
+        return base
+
+    def dispatch(self, character: Character, yourCharacters: list[Character]) -> Role:
+        """Role dispatching algorithm"""
+        if len(yourCharacters) <= 2:
+            return Collecter(self.base)
+
+        else:
+            return Collecter(self.base)
+
+    def get_next_move(self, game_message: TeamGameState):
+        """
+        Here is where the magic happens, for now the moves are not very good. I bet you can do better ;)
+        """
+        actions = []
+
+        for character in game_message.yourCharacters:
+            # initialize characters at first tick
+            if game_message.tick == 1:
+                self.base = self.find_base(game_message)
+                self.character_roles[character.id] = self.dispatch(
+                    character, game_message.yourCharacters)
+
+            character_role = self.character_roles[character.id]
+            actions.append(character_role.action(
+                character, game_message))
+
+        # You can clearly do better than the random actions above! Have fun!
+        return actions
