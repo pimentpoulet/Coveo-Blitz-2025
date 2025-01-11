@@ -183,10 +183,12 @@ class Collecter(Role):
             radiant_items = [i for i in state.items if i.type in radiant_type]
             self.radiant_items_on_my_side = self.get_items_on_my_side(
                 radiant_items, state)
-            if len(self.radiant_items_on_my_side) > 0:
-                new_role = Dumper(self.base)
-            else:
-                new_role = Protecter(self.base)
+            # if len(self.radiant_items_on_my_side) > 0:
+            #     new_role = Dumper(self.base)
+            # else:
+            #     new_role = Protecter(self.base)
+            new_role = Dumper(self.base)
+
             move_to = random.choice(self.base)
             return ActionResponse(MoveToAction(characterId=character.id, position=move_to), new_role)
 
@@ -395,8 +397,20 @@ class Bot:
 
         count = Counter(type(role)
                         for role in self.character_roles.values())
-        if len(self.get_radiant(state)) > 1 and count[Dumper] < 1:
-            pass
+        if len(self.get_radiant(state)) > 0 and count[Dumper] == 0:
+            for k, v in self.character_roles.items():
+                if type(v) != Dumper:
+                    self.character_roles[k] = Dumper(self.base)
+                    break
+
+        if len(self.get_radiant(state)) == 0 and count[Dumper] > 0:
+            for k, v in self.character_roles.items():
+                if type(v) == Dumper:
+                    self.character_roles[k] = Collecter(self.base)
+                    break
+
+    def emergency(self, state: TeamGameState):
+        pass
 
     def get_next_move(self, game_message: TeamGameState):
         """
@@ -404,7 +418,8 @@ class Bot:
         """
         actions = []
 
-        self.dispatch(game_message)
+        if game_message.tick % 200 == 0:
+            self.dispatch(game_message)
         for character in game_message.yourCharacters:
             # initialize characters at first tick
             if game_message.tick == 1:
